@@ -278,20 +278,6 @@ Possible enhancements:
 
 ---
 
-# Screenshots
-
-You can add screenshots here later.
-
-Example:
-
-```md
-![Training Dashboard](screenshots/train.png)
-
-![Live Simulation](screenshots/test.png)
-```
-
----
-
 # .gitignore
 
 Recommended:
