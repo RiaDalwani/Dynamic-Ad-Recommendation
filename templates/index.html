@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RL Ads — History-Based</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:#0c0f0a; --surface:#131710; --surface2:#181d14; --border:#1e2419;
+  --accent:#7ecb35; --accent2:#e05a5a; --accent3:#f0a500;
+  --text:#e8f0e0; --muted:#6b7a5e; --dim:#2a3222;
+  --sports:#378ADD; --tech:#7ecb35; --fashion:#D4537E;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;font-size:14px;}
+
+header{border-bottom:1px solid var(--border);padding:.9rem 1.75rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+header h1{font-size:1rem;font-weight:700;letter-spacing:-.02em;}
+.tag{font-family:'DM Mono',monospace;font-size:.65rem;padding:2px 9px;border-radius:20px;border:1px solid;}
+.tag.green{color:var(--accent);background:#1a2a0e;border-color:#2d4a18;}
+.tag.gold{color:var(--accent3);background:#2a1e00;border-color:#5a3d00;}
+
+.tabs{display:flex;border-bottom:1px solid var(--border);}
+.tab{padding:.7rem 1.5rem;font-size:.8rem;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .15s;}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab:hover:not(.active){color:var(--text);}
+
+.pane{display:none;} .pane.active{display:flex;}
+
+/* ── Train tab ── */
+.train-layout{width:100%;display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 100px);}
+aside{border-right:1px solid var(--border);padding:1.1rem;display:flex;flex-direction:column;gap:1.1rem;}
+.s-title{font-size:.62rem;font-weight:600;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:.6rem;}
+.param{margin-bottom:.8rem;}
+.param-header{display:flex;justify-content:space-between;margin-bottom:4px;}
+.param-name{font-size:.78rem;color:var(--text);}
+.param-val{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--accent);}
+input[type=range]{width:100%;height:3px;appearance:none;background:var(--border);border-radius:2px;outline:none;cursor:pointer;}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;border-radius:50%;background:var(--accent);cursor:pointer;}
+select{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:.78rem;font-family:'Syne',sans-serif;cursor:pointer;outline:none;}
+.btn-primary{width:100%;padding:9px;background:var(--accent);color:#0c1a04;border:none;border-radius:8px;font-size:.85rem;font-weight:700;font-family:'Syne',sans-serif;cursor:pointer;transition:opacity .15s;}
+.btn-primary:hover{opacity:.85;} .btn-primary:disabled{opacity:.4;cursor:not-allowed;}
+.mono-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);line-height:1.9;}
+.mono-box .hl{color:var(--accent);} .mono-box .hl2{color:var(--accent3);}
+
+main-train{display:block;padding:1.1rem 1.5rem;overflow-y:auto;flex:1;}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.1rem;}
+.metric{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 13px;}
+.metric-label{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;}
+.metric-value{font-size:1.4rem;font-weight:700;font-family:'DM Mono',monospace;}
+.green{color:var(--accent);} .red{color:var(--accent2);} .gold{color:var(--accent3);}
+.progress-wrap{background:var(--border);border-radius:3px;height:3px;overflow:hidden;margin-bottom:1.1rem;}
+.progress-fill{height:3px;background:var(--accent);border-radius:3px;width:0%;transition:width .3s;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.1rem;}
+.card-title{font-size:.62rem;font-weight:600;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:.8rem;}
+.chart-wrap{position:relative;height:200px;}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:.68rem;color:var(--muted);margin-bottom:7px;}
+.legend span{display:flex;align-items:center;gap:5px;}
+.ldot{width:9px;height:9px;border-radius:2px;}
+
+/* Q-table */
+.qtable{width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:.68rem;}
+.qtable th{text-align:left;padding:5px 6px;color:var(--muted);border-bottom:1px solid var(--border);font-family:'Syne',sans-serif;font-size:.58rem;letter-spacing:.07em;font-weight:600;}
+.qtable td{padding:4px 6px;border-bottom:1px solid var(--border);color:var(--text);}
+.qtable tr:last-child td{border-bottom:none;}
+.q-val{padding:1px 4px;border-radius:3px;}
+.q-best{background:#1a2a0e;color:var(--accent);font-weight:500;}
+.ad-badge{font-size:.62rem;padding:2px 7px;border-radius:20px;font-weight:600;white-space:nowrap;}
+.ad-sports{background:#0d1e33;color:var(--sports);}
+.ad-tech{background:#131e08;color:var(--tech);}
+.ad-fashion{background:#2a0e1a;color:var(--fashion);}
+
+/* ── Test tab ── */
+.test-layout{width:100%;display:grid;grid-template-columns:1fr 340px;min-height:calc(100vh - 100px);}
+.test-main{padding:1.1rem 1.5rem;display:flex;flex-direction:column;gap:12px;overflow-y:auto;}
+.test-side{border-left:1px solid var(--border);padding:1.1rem;display:flex;flex-direction:column;gap:1.1rem;overflow-y:auto;}
+
+/* Session timeline */
+.session-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.8rem;}
+.eps-badge{font-family:'DM Mono',monospace;font-size:.7rem;padding:3px 10px;border-radius:20px;border:1px solid var(--border);color:var(--muted);}
+.eps-badge.exploring{color:var(--accent3);border-color:var(--accent3);background:#2a1e00;}
+.eps-badge.exploiting{color:var(--accent);border-color:var(--accent);background:#1a2a0e;}
+
+.timeline{display:flex;flex-direction:column;gap:6px;max-height:380px;overflow-y:auto;padding-right:4px;}
+.step-row{display:grid;grid-template-columns:22px 90px 80px 60px 1fr;gap:8px;align-items:center;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);transition:border-color .2s;}
+.step-row.click{border-color:#2d4a18;}
+.step-row.no-click{border-color:var(--border);}
+.step-num{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);text-align:center;}
+.step-mode{font-size:.6rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;}
+.step-mode.explore{color:var(--accent3);}
+.step-mode.exploit{color:var(--accent);}
+.step-outcome{font-family:'DM Mono',monospace;font-size:.75rem;}
+.step-outcome.click{color:var(--accent);}
+.step-outcome.skip{color:var(--muted);}
+.step-history{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);}
+
+/* History bars */
+.hist-bars{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;}
+.hist-bar-wrap{text-align:center;}
+.hist-label{font-size:.6rem;color:var(--muted);margin-bottom:4px;}
+.hist-track{height:60px;background:var(--dim);border-radius:4px;display:flex;align-items:flex-end;overflow:hidden;}
+.hist-fill{width:100%;border-radius:4px 4px 0 0;transition:height .4s ease;}
+.hist-count{font-family:'DM Mono',monospace;font-size:.75rem;font-weight:500;margin-top:4px;}
+
+/* Recommendation result */
+.rec-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:center;}
+.rec-ad{font-size:1.1rem;font-weight:700;margin-bottom:4px;}
+.rec-sub{font-size:.7rem;color:var(--muted);}
+.q-bars{display:flex;flex-direction:column;gap:5px;margin-top:10px;}
+.q-bar-row{display:grid;grid-template-columns:70px 1fr 45px;gap:6px;align-items:center;}
+.q-bar-label{font-size:.65rem;color:var(--muted);}
+.q-bar-track{height:6px;background:var(--dim);border-radius:3px;overflow:hidden;}
+.q-bar-fill{height:100%;border-radius:3px;transition:width .4s ease;}
+.q-bar-val{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--text);text-align:right;}
+
+.btn-outline{padding:7px 14px;background:transparent;border:1px solid var(--border);color:var(--text);border-radius:7px;font-family:'Syne',sans-serif;font-size:.78rem;cursor:pointer;transition:background .1s;}
+.btn-outline:hover{background:var(--surface);}
+.btn-outline:disabled{opacity:.4;cursor:not-allowed;}
+
+#statusMsg{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--accent);min-height:16px;}
+#testStatusMsg{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--accent);min-height:16px;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>RL Ads Recommendation</h1>
+  <span class="tag green">Q-Learning</span>
+  <span class="tag gold">v3 — history-based state</span>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('train')">① Train</div>
+  <div class="tab" onclick="switchTab('test')" id="testTab">② Test — live user session</div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     TAB 1: TRAIN
+══════════════════════════════════════════ -->
+<div class="pane active" id="pane-train">
+<div class="train-layout">
+<aside>
+  <div>
+    <div class="s-title">Hyperparameters</div>
+    <div class="param">
+      <div class="param-header"><span class="param-name">α — learning rate</span><span class="param-val" id="alphaVal">0.10</span></div>
+      <input type="range" id="alpha" min="1" max="20" value="2" oninput="syncParams()">
+    </div>
+    <div class="param">
+      <div class="param-header"><span class="param-name">γ — discount</span><span class="param-val" id="gammaVal">0.90</span></div>
+      <input type="range" id="gamma" min="1" max="10" value="9" oninput="syncParams()">
+    </div>
+    <div class="param">
+      <div class="param-header"><span class="param-name">ε — initial exploration</span><span class="param-val" id="epsVal">1.00</span></div>
+      <input type="range" id="epsilon" min="1" max="10" value="10" oninput="syncParams()">
+    </div>
+    <div class="param">
+      <div class="param-header"><span class="param-name">episodes</span><span class="param-val" id="epVal">3,000</span></div>
+      <select id="episodes" onchange="syncParams()">
+        <option value="500">500</option>
+        <option value="1000">1,000</option>
+        <option value="2000">2,000</option>
+        <option value="3000" selected>3,000</option>
+        <option value="5000">5,000</option>
+        <option value="10000">10,000</option>
+      </select>
+    </div>
+  </div>
+
+  <button class="btn-primary" id="trainBtn" onclick="trainAgent()">▶ Train Agent</button>
+  <div id="statusMsg"></div>
+
+  <div>
+    <div class="s-title">State = click history</div>
+    <div class="mono-box">
+      State tracks clicks per ad type<br>
+      bucketed into 0 / 1 / 2+ clicks.<br><br>
+      <span class="hl">3 ad types × 3 buckets</span><br>
+      = 3³ = <span class="hl">27 possible states</span><br><br>
+      <span class="hl2">No identity label needed.</span><br>
+      Agent infers preferences<br>
+      purely from click history.
+    </div>
+  </div>
+
+  <div>
+    <div class="s-title">Hidden personas (5 types)</div>
+    <div class="mono-box">
+      Sports fan &nbsp;&nbsp;[.80 .20 .15]<br>
+      Tech enthusiast [.15 .80 .20]<br>
+      Fashion lover &nbsp;[.10 .20 .85]<br>
+      Generalist &nbsp;&nbsp;&nbsp;[.40 .40 .40]<br>
+      Ad skeptic &nbsp;&nbsp;&nbsp;[.15 .15 .15]<br><br>
+      <span class="hl2">Agent never sees these labels.</span><br>
+      Only click signals observed.
+    </div>
+  </div>
+</aside>
+
+<main-train>
+  <div class="metrics">
+    <div class="metric"><div class="metric-label">Episodes trained</div><div class="metric-value" id="m-ep">—</div></div>
+    <div class="metric"><div class="metric-label">RL CTR (final)</div><div class="metric-value green" id="m-rl">—</div></div>
+    <div class="metric"><div class="metric-label">Random baseline</div><div class="metric-value red" id="m-rand">—</div></div>
+    <div class="metric"><div class="metric-label">Improvement</div><div class="metric-value green" id="m-lift">—</div></div>
+  </div>
+  <div class="progress-wrap"><div class="progress-fill" id="progressFill"></div></div>
+
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">CTR over training (per-session average)</div>
+      <div class="legend">
+        <span><span class="ldot" style="background:var(--accent)"></span>RL agent</span>
+        <span><span class="ldot" style="background:var(--accent2)"></span>Random baseline</span>
+      </div>
+      <div class="chart-wrap"><canvas id="rewardChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">How state works — click history → state index</div>
+      <div class="mono-box" style="font-size:.63rem;line-height:2">
+        State = sports_clicks×9 + tech_clicks×3 + fashion_clicks<br>
+        (each click count capped at 2)<br><br>
+        <span class="hl">state 0</span>: Sports:0 | Tech:0 | Fashion:0  ← cold user<br>
+        <span class="hl">state 9</span>: Sports:1 | Tech:0 | Fashion:0  ← clicked sports once<br>
+        <span class="hl">state 4</span>: Sports:0 | Tech:1 | Fashion:1  ← clicked tech &amp; fashion<br>
+        <span class="hl">state 26</span>: Sports:2+| Tech:2+| Fashion:2+ ← high engager<br><br>
+        As user clicks ads → state updates → agent refines recommendation.
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Learned Q-table (27 states — showing states with highest Q-values)</div>
+    <div style="overflow-x:auto;max-height:320px;overflow-y:auto;">
+      <table class="qtable" id="qtable">
+        <tr><th>State (click history)</th><th>Sports Ad</th><th>Tech Ad</th><th>Fashion Ad</th><th>Best recommendation</th></tr>
+        <tr><td colspan="5" style="color:var(--muted);padding:1rem 0">Train the agent to populate this</td></tr>
+      </table>
+    </div>
+  </div>
+</main-train>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     TAB 2: TEST — live user session
+══════════════════════════════════════════ -->
+<div class="pane" id="pane-test">
+<div class="test-layout">
+
+<div class="test-main">
+  <div class="card">
+    <div class="session-header">
+      <div class="card-title" style="margin-bottom:0">Live user session</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="eps-badge" id="epsBadge">ε = 1.00 — exploring</span>
+        <button class="btn-outline" id="nextBtn" onclick="showNextAd()" disabled>Show next ad →</button>
+        <button class="btn-outline" id="newUserBtn" onclick="newUser()">New user</button>
+      </div>
+    </div>
+    <div id="testStatusMsg" style="margin:.5rem 0"></div>
+
+    <!-- History bars -->
+    <div style="margin:12px 0 8px">
+      <div class="s-title">Click history (current user)</div>
+      <div class="hist-bars">
+        <div class="hist-bar-wrap">
+          <div class="hist-label">Sports</div>
+          <div class="hist-track"><div class="hist-fill" id="bar-sports" style="height:0%;background:var(--sports)"></div></div>
+          <div class="hist-count green" id="cnt-sports">0</div>
+        </div>
+        <div class="hist-bar-wrap">
+          <div class="hist-label">Tech</div>
+          <div class="hist-track"><div class="hist-fill" id="bar-tech" style="height:0%;background:var(--tech)"></div></div>
+          <div class="hist-count green" id="cnt-tech">0</div>
+        </div>
+        <div class="hist-bar-wrap">
+          <div class="hist-label">Fashion</div>
+          <div class="hist-track"><div class="hist-fill" id="bar-fashion" style="height:0%;background:var(--fashion)"></div></div>
+          <div class="hist-count green" id="cnt-fashion">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step timeline -->
+    <div class="s-title">Ad sequence this session</div>
+    <div class="timeline" id="timeline">
+      <div style="color:var(--muted);font-size:.8rem;padding:.5rem 0">Start a session to see ad recommendations appear here...</div>
+    </div>
+  </div>
+</div>
+
+<!-- right panel -->
+<div class="test-side">
+  <div>
+    <div class="s-title">Exploration rate (ε)</div>
+    <div class="param">
+      <div class="param-header"><span class="param-name">ε for this session</span><span class="param-val" id="testEpsVal">0.80</span></div>
+      <input type="range" id="testEpsilon" min="0" max="10" value="8" oninput="syncTestEps()">
+    </div>
+    <div class="mono-box" style="font-size:.63rem;line-height:1.8">
+      <span class="hl2">High ε</span> → random ads (explore)<br>
+      <span class="hl">Low ε</span> &nbsp;→ best learned ad (exploit)<br><br>
+      In a real system ε starts high<br>
+      for new users and decays as<br>
+      their history builds up.
+    </div>
+  </div>
+
+  <div>
+    <div class="s-title">Current recommendation</div>
+    <div class="rec-box" id="recBox">
+      <div class="rec-ad" style="color:var(--muted)">—</div>
+      <div class="rec-sub">Click "Show next ad" to begin</div>
+    </div>
+    <div class="q-bars" id="qBars">
+      <div class="q-bar-row"><span class="q-bar-label">Sports Ad</span><div class="q-bar-track"><div class="q-bar-fill" id="qb-0" style="width:0%;background:var(--sports)"></div></div><span class="q-bar-val" id="qv-0">—</span></div>
+      <div class="q-bar-row"><span class="q-bar-label">Tech Ad</span><div class="q-bar-track"><div class="q-bar-fill" id="qb-1" style="width:0%;background:var(--tech)"></div></div><span class="q-bar-val" id="qv-1">—</span></div>
+      <div class="q-bar-row"><span class="q-bar-label">Fashion Ad</span><div class="q-bar-track"><div class="q-bar-fill" id="qb-2" style="width:0%;background:var(--fashion)"></div></div><span class="q-bar-val" id="qv-2">—</span></div>
+    </div>
+  </div>
+
+  <div id="personaReveal" style="display:none">
+    <div class="s-title">Hidden persona (revealed)</div>
+    <div class="mono-box" id="personaBox"></div>
+  </div>
+
+  <div>
+    <div class="s-title">Session stats</div>
+    <div class="mono-box" id="sessionStats" style="line-height:2">
+      Ads shown: —<br>Clicks: —<br>Session CTR: —
+    </div>
+  </div>
+</div>
+
+</div>
+</div>
+
+<script>
+const ADS = ['Sports Ad','Tech Ad','Fashion Ad'];
+const AD_CLASS = ['ad-sports','ad-tech','ad-fashion'];
+const AD_COLORS = ['var(--sports)','var(--tech)','var(--fashion)'];
+
+let trainedQTable = null;
+let rewardChart = null;
+
+// Session state
+let sessionHistory = [0,0,0];
+let sessionPersonaIdx = -1;
+let sessionStep = 0;
+let sessionClicks = 0;
+let sessionActive = false;
+
+// ── Param sync ──────────────────────────────
+function syncParams() {
+  document.getElementById('alphaVal').textContent = (parseInt(document.getElementById('alpha').value)/20).toFixed(2);
+  document.getElementById('gammaVal').textContent = (parseInt(document.getElementById('gamma').value)/10).toFixed(2);
+  document.getElementById('epsVal').textContent   = (parseInt(document.getElementById('epsilon').value)/10).toFixed(2);
+  document.getElementById('epVal').textContent    = parseInt(document.getElementById('episodes').value).toLocaleString();
+}
+function syncTestEps() {
+  const v = (parseInt(document.getElementById('testEpsilon').value)/10).toFixed(2);
+  document.getElementById('testEpsVal').textContent = v;
+}
+
+// ── Tab switching ────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['train','test'][i]===name));
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('pane-'+name).classList.add('active');
+}
+
+// ── Train ────────────────────────────────────
+async function trainAgent() {
+  const btn = document.getElementById('trainBtn');
+  btn.disabled = true; btn.textContent = '⏳ Training...';
+  document.getElementById('statusMsg').textContent = 'Sending to /api/train...';
+  document.getElementById('progressFill').style.width = '20%';
+
+  const payload = {
+    episodes: parseInt(document.getElementById('episodes').value),
+    alpha:    parseFloat(document.getElementById('alphaVal').textContent),
+    gamma:    parseFloat(document.getElementById('gammaVal').textContent),
+    epsilon:  parseFloat(document.getElementById('epsVal').textContent),
+  };
+
+  try {
+    const res  = await fetch('/api/train', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data = await res.json();
+    document.getElementById('progressFill').style.width = '100%';
+    document.getElementById('statusMsg').textContent = 'Done ✓  — go to Tab ② to test the agent on a live user';
+
+    trainedQTable = data.q_table;
+    document.getElementById('testTab').textContent = '② Test — live user session ✓';
+    document.getElementById('nextBtn').disabled = false;
+
+    renderMetrics(data, payload.episodes);
+    renderRewardChart(data.rl_curve, data.rand_curve, payload.episodes);
+    renderQTable(data.q_table, data.state_best, data.state_labels);
+  } catch(e) {
+    document.getElementById('statusMsg').textContent = 'Error — is Flask running? (python app.py)';
+  }
+  btn.disabled = false; btn.textContent = '▶ Train Again';
+}
+
+function renderMetrics(data, ep) {
+  document.getElementById('m-ep').textContent   = ep.toLocaleString();
+  document.getElementById('m-rl').textContent   = (data.final_rl_ctr*100).toFixed(1)+'%';
+  document.getElementById('m-rand').textContent = (data.final_rand_ctr*100).toFixed(1)+'%';
+  const lift = data.final_rl_ctr - data.final_rand_ctr;
+  document.getElementById('m-lift').textContent = (lift>=0?'+':'')+(lift*100).toFixed(1)+'%';
+}
+
+function renderRewardChart(rl, rand, episodes) {
+  const labels = rl.map((_,i) => Math.round(i*episodes/rl.length));
+  if (rewardChart) rewardChart.destroy();
+  rewardChart = new Chart(document.getElementById('rewardChart'), {
+    type:'line',
+    data:{labels,datasets:[
+      {label:'RL',data:rl.map(v=>+(v*100).toFixed(1)),borderColor:'#7ecb35',borderWidth:2,pointRadius:0,tension:.4,fill:false},
+      {label:'Random',data:rand.map(v=>+(v*100).toFixed(1)),borderColor:'#e05a5a',borderWidth:2,pointRadius:0,tension:.4,fill:false,borderDash:[5,4]},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#6b7a5e',maxTicksLimit:6,font:{size:10}},grid:{color:'#1e2419'}},
+        y:{min:0,max:100,ticks:{color:'#6b7a5e',font:{size:10},callback:v=>v+'%'},grid:{color:'#1e2419'}}
+      }}
+  });
+}
+
+function renderQTable(qTable, stateBest, stateLabels) {
+  const sorted = stateBest
+    .map((s,i) => ({...s, idx:i, maxQ: Math.max(...qTable[i])}))
+    .sort((a,b) => b.maxQ - a.maxQ);
+
+  let rows = sorted.map(s => {
+    const row = qTable[s.idx];
+    const bestA = row.indexOf(Math.max(...row));
+    let cells = '';
+    for (let a=0;a<3;a++) {
+      const isBest = a===bestA && Math.max(...row)>0.001;
+      cells += `<td><span class="q-val ${isBest?'q-best':''}">${row[a].toFixed(4)}</span></td>`;
+    }
+    const cls = AD_CLASS[bestA];
+    return `<tr><td style="font-size:.63rem;color:var(--muted);white-space:nowrap">${s.state}</td>${cells}<td><span class="ad-badge ${cls}">${ADS[bestA]}</span></td></tr>`;
+  }).join('');
+
+  document.getElementById('qtable').innerHTML =
+    `<tr><th>State (click history)</th><th>Sports Ad</th><th>Tech Ad</th><th>Fashion Ad</th><th>Best recommendation</th></tr>${rows}`;
+}
+
+// ── Test session ──────────────────────────────
+function newUser() {
+  sessionHistory   = [0,0,0];
+  sessionPersonaIdx = -1;
+  sessionStep      = 0;
+  sessionClicks    = 0;
+  sessionActive    = true;
+
+  document.getElementById('timeline').innerHTML = '';
+  document.getElementById('personaReveal').style.display = 'none';
+  updateHistBars([0,0,0]);
+  updateRecBox(null, null);
+  updateSessionStats(0,0);
+  document.getElementById('testStatusMsg').textContent = 'New user arrived — history is empty, starting with exploration';
+  document.getElementById('nextBtn').disabled = !trainedQTable;
+}
+
+async function showNextAd() {
+  if (!trainedQTable) { alert('Train the agent first (Tab ①)'); return; }
+
+  const eps = parseFloat(document.getElementById('testEpsVal').textContent);
+  document.getElementById('nextBtn').disabled = true;
+
+  const payload = {
+    q_table:     trainedQTable,
+    history:     sessionHistory,
+    epsilon:     eps,
+    persona_idx: sessionPersonaIdx,
+  };
+
+  const res  = await fetch('/api/simulate_user', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const data = await res.json();
+
+  sessionPersonaIdx = data.persona_idx;
+  sessionHistory    = data.history;
+  sessionStep++;
+  if (data.reward===1) sessionClicks++;
+
+  addTimelineRow(sessionStep, data.mode, data.ad_shown, data.reward, data.history, data.state_label);
+  updateHistBars(data.history);
+  updateRecBox(data.action, data.q_values, data.ad_shown, data.reward, data.mode);
+  updateSessionStats(sessionStep, sessionClicks);
+  updateEpsBadge(eps, data.mode);
+
+  // Reveal persona after 5 steps
+  if (sessionStep >= 5) {
+    revealPersona(data.persona_name, data.persona_probs);
+  }
+
+  document.getElementById('testStatusMsg').textContent =
+    `Step ${sessionStep}: showed ${data.ad_shown} → ${data.reward===1?'✓ clicked':'✗ skipped'} (${data.mode})`;
+
+  document.getElementById('nextBtn').disabled = false;
+}
+
+function addTimelineRow(step, mode, ad, reward, history, stateLabel) {
+  const adIdx = ADS.indexOf(ad);
+  const cls = AD_CLASS[adIdx];
+  const row = document.createElement('div');
+  row.className = `step-row ${reward===1?'click':'no-click'}`;
+  row.innerHTML = `
+    <span class="step-num">${step}</span>
+    <span class="step-mode ${mode==='explore'?'explore':'exploit'}">${mode}</span>
+    <span><span class="ad-badge ${cls}">${ad}</span></span>
+    <span class="step-outcome ${reward===1?'click':'skip'}">${reward===1?'✓ click':'✗ skip'}</span>
+    <span class="step-history">S:${history[0]} T:${history[1]} F:${history[2]}</span>
+  `;
+  const tl = document.getElementById('timeline');
+  tl.appendChild(row);
+  tl.scrollTop = tl.scrollHeight;
+}
+
+function updateHistBars(history) {
+  const ids = ['sports','tech','fashion'];
+  const colors = ['var(--sports)','var(--tech)','var(--fashion)'];
+  const max = Math.max(2, ...history);
+  history.forEach((v,i) => {
+    document.getElementById(`bar-${ids[i]}`).style.height = Math.max(4, (v/max)*100)+'%';
+    document.getElementById(`cnt-${ids[i]}`).textContent = v;
+  });
+}
+
+function updateRecBox(actionIdx, qValues, adShown, reward, mode) {
+  if (actionIdx === null) {
+    document.getElementById('recBox').innerHTML = '<div class="rec-ad" style="color:var(--muted)">—</div><div class="rec-sub">Click "Show next ad" to begin</div>';
+    ['qb-0','qb-1','qb-2'].forEach(id => document.getElementById(id).style.width='0%');
+    ['qv-0','qv-1','qv-2'].forEach(id => document.getElementById(id).textContent='—');
+    return;
+  }
+  const cls = AD_CLASS[actionIdx];
+  const rewardIcon = reward===1 ? '✓ clicked' : '✗ skipped';
+  const rewardColor = reward===1 ? 'var(--accent)' : 'var(--accent2)';
+  document.getElementById('recBox').innerHTML = `
+    <div class="rec-ad"><span class="ad-badge ${cls}" style="font-size:.9rem;padding:4px 12px">${adShown}</span></div>
+    <div class="rec-sub" style="margin-top:6px;color:${rewardColor}">${rewardIcon}</div>
+    <div class="rec-sub" style="margin-top:3px">${mode==='explore'?'randomly explored':'agent exploited Q-table'}</div>
+  `;
+  if (qValues) {
+    const maxQ = Math.max(...qValues.map(Math.abs), 0.001);
+    qValues.forEach((v,i) => {
+      document.getElementById(`qb-${i}`).style.width = Math.max(0,(v/maxQ)*100).toFixed(1)+'%';
+      document.getElementById(`qv-${i}`).textContent = v.toFixed(4);
+    });
+  }
+}
+
+function updateSessionStats(steps, clicks) {
+  const ctr = steps > 0 ? (clicks/steps*100).toFixed(1)+'%' : '—';
+  document.getElementById('sessionStats').innerHTML =
+    `Ads shown: ${steps}<br>Clicks: ${clicks}<br>Session CTR: ${ctr}`;
+}
+
+function updateEpsBadge(eps, mode) {
+  const badge = document.getElementById('epsBadge');
+  badge.textContent = `ε = ${eps.toFixed(2)} — ${mode==='explore'?'exploring':'exploiting'}`;
+  badge.className = `eps-badge ${mode==='explore'?'exploring':'exploiting'}`;
+}
+
+function revealPersona(name, probs) {
+  document.getElementById('personaReveal').style.display = 'block';
+  document.getElementById('personaBox').innerHTML =
+    `<span class="hl2">${name}</span><br>` +
+    ADS.map((ad,i) => `${ad.replace(' Ad','')}: ${(probs[i]*100).toFixed(0)}% click prob`).join('<br>');
+}
+
+// Init
+syncParams();
+syncTestEps();
+newUser();
+</script>
+</body>
+</html>
